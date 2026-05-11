@@ -1,6 +1,6 @@
-# skills
+# `alexreardon/skills`
 
-Alex Reardon's collection of [agent skills](https://vercel.com/docs/agent-resources/skills).
+[Alex Reardon's](https://x.com/alexandereardon) collection of [agent skills](https://vercel.com/docs/agent-resources/skills).
 
 ## Install
 
@@ -13,6 +13,8 @@ To install a single skill from this repo:
 ```bash
 npx skills add alexreardon/skills --skill cook-me
 ```
+
+> [More installation options](https://github.com/vercel-labs/skills)
 
 ## Skills
 
