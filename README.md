@@ -22,32 +22,23 @@ npx skills add alexreardon/skills --skill cook-me
 
 Opinionated version of the [`/grill-me`](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md) skill by [Matt Pocock](https://x.com/mattpocockuk) that makes `/grill-me` easier to work with through consistent patterns for question asking, language and layout.
 
-_The opinions_
+_`/cook-me` opinions_
 
-- 1️⃣ Only one question per turn. Never ask multiple questions at a time
-- 🙌 Questions and options are phrased in positive language so it's easy to say "yes" to things (no double negatives)
-- ⬇️ Every question orders proposals and options in order from most to least recommended paths forward
+- 1️⃣ Only one question per "turn" (ai output and user response). Never ask multiple questions at a time
+- 🪣 Clearly separate "exploration" from "option selection" per turn
+- 🙌 Options phrased in positive language so it's easy to say "yes" to things (no double negatives)
+- ⬇️ Every turn orders proposals and options in order from most to least recommended paths forward
 - 💅 Leveraging consistent markdown formatting to make it easy to predictably parse outputs (super helpful when you have to answer lots of questions!)
 - 🧘 What you need to do for every turn should be obvious (answer a question, provide more details, etc)
 
 #### `/grill-me` vs `/cook-me` output
 
-To better understand what `/cook-me` does, below is listed out a output comparison between `/grill-me` and `/cook-me`. All below output was captured with `Opus 4.7 (Anthropic)`.
+**Prompt:** `"I want to add rate limiting to my API"`
 
-#### Model asking clarifying questions
-
-**Prompt**:
-> `"I want to add rate limiting to my API"`
-
-_What `/cook-me` brings_
-
-- 🎯 Candidates are numbered and explicitly ordered (no guessing which is the recommended path)
-- 🪜 3 lines per candidate: the name, what it is, then why it matters (easy to skim, easy to compare)
-- 💡 Rationales call out the non-obvious gotcha, not generic "pushes toward X" template language
-- 👉 The final `**Next step:**` line makes the action obvious — no wondering what to do
+> 🍽️ **Always plated the same!** Every `/cook-me` turn is formatted in the same way to allow quick parsing
 
 <details>
-<summary>See the full output comparison</summary>
+<summary>Show output comparison</summary>
 
 <br>
 
@@ -109,21 +100,14 @@ _**Next step:** name the primary driver._
 
 </details>
 
-#### Model providing recommendations
+<br>
 
-**Prompt**:
-> `"I'm adding rate limiting to my API. What algorithm should I use — token bucket, leaky bucket, fixed window, or sliding window?"`
+**Prompt:** `"I'm adding rate limiting to my API. What algorithm should I use — token bucket, leaky bucket, fixed window, or sliding window?"`
 
-_What `/cook-me` brings_
-
-- 🛑 Refuses to rank options when intent isn't pinned — runs a clarifying exploration turn first, then the recommendation
-- 🔄 Multi-turn flow keeps each turn focused on one decision (the user's reply between turns is shown explicitly)
-- 🗺️ Each candidate names where it leads inline (e.g. `` `Leads to →` token bucket ``), so you can pattern-match or short-circuit without waiting for the next turn — no mental mapping between sections
-- 🎚️ Stacks `**Assumption:**` lines for the guessable defaults the recommendation rides on — you can correct any of them in-place
-- 🔍 Each option's rationale names the specific operational gotcha (not the textbook contrast you'd read in any rate-limiting blog post)
+> 👨‍🍳 **One ingredient at a time!** `/grill-me` put a algorithm recommendation _and_ a follow-up intent question into one turn. `/cook-me` handles them separately. Q1 locks in the intent, Q2 picks the algorithm with that answer in hand (no guessing required! ✨).
 
 <details>
-<summary>See the full output comparison</summary>
+<summary>Show output comparison</summary>
 
 <br>
 
