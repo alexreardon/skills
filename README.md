@@ -35,7 +35,12 @@ _`/cook-me` opinions_
 
 **Prompt:** `"I want to add rate limiting to my API"`
 
-> 🍽️ **Always plated the same!** Every `/cook-me` turn is formatted in the same way to allow quick parsing
+> 🧘 `/cook-me` has a consistent flow
+>
+> 1. One anchored question
+> 2. ranked candidates with the non-obvious tradeoff under each
+> 3. recommendation
+> 4. explicit next step
 
 <details>
 <summary>Show output comparison</summary>
