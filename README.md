@@ -67,26 +67,30 @@ Which of these is closest to your actual motivation? If it's a mix, which one do
 </td>
 <td valign="top">
 
-**`Q1 of ~7.`**
-> What's driving the rate limit — abuse protection, cost control, fairness across tenants, or upstream quota?
+**`Q1 of ~8.`**
+> What's driving the need — abuse prevention, cost control, or fairness across clients?
 
-_The candidates and what they imply:_
+The candidates and what they imply:
 
-`1)` **Abuse / DoS protection** — block bursty or malicious clients before they degrade the service.
-_Pushes toward per-IP or per-key limits with aggressive short windows and hard rejects._
+`1)` **Abuse / DoS protection**<br>
+Block bursts from a single bad actor before they reach expensive handlers.<br>
+_Pushes toward per-IP or per-token limits with aggressive short windows; fail-closed on the edge (gateway/CDN) is usually right._
 
-`2)` **Cost control** — cap spend on paid downstream dependencies (LLM tokens, third-party APIs, egress).
-_Pushes toward global or per-tenant budgets measured in units (tokens, dollars), often with daily/monthly windows._
+`2)` **Cost control on downstream resources**<br>
+Cap aggregate load on a DB, paid third-party API, or LLM provider.<br>
+_Pushes toward global or per-resource concurrency limits, not per-client; the limit lives near the expensive call, not the edge._
 
-`3)` **Fairness across tenants** — stop one customer starving others on shared capacity.
-_Pushes toward per-tenant quotas with queueing or weighted fair sharing, not just rejection._
+`3)` **Fairness across tenants / plan enforcement**<br>
+Stop one customer from starving others, and align usage with billing tiers.<br>
+_Pushes toward per-API-key quotas with longer windows (per-minute, per-day), tier-aware config, and clear `429` headers so clients can self-pace._
 
-`4)` **Upstream quota compliance** — you're a client of an API with its own limits and need to stay under them.
-_Pushes toward a client-side token bucket sized to the upstream contract, with backpressure to your callers._
+`4)` **Belt-and-suspenders — all of the above**<br>
+You want some of each because the API is public and monetized.<br>
+_Realistic for most production APIs, but the layers stack differently and the order matters; worth naming so we sequence the design instead of conflating them._
 
-**Recommendation:** Most teams adding rate limiting for the first time are solving `1)` — start there unless you already feel pain from one of the others.
+**Recommendation:** `3)` if this API has authenticated clients on plans; `1)` if it's public and unmonetized. Most teams end up at `4)` but should still pick the primary driver to anchor the design.
 
-_**Next step:** Pick a number, or describe the actual pressure you're feeling._
+_**Next step:** Pick the primary driver, or tell me more about who calls this API and what hurts when they call it too much._
 
 </td>
 </tr>
@@ -123,28 +127,32 @@ Do your clients have legitimate bursty traffic patterns (e.g., a batch job that 
 </td>
 <td valign="top">
 
-**`Q1 of ~7.`**
-> Which algorithm should enforce your rate limits?
+**`Q1 of ~6.`**
+> Which rate-limiting algorithm fits your API?
 
 **`Options`** _(best first)_
 
-`1)` **Token bucket**
-_Allows short bursts up to bucket size, then steady refill rate. Most permissive for legitimate spiky traffic._
+`1)` **Token bucket**<br>
+Tokens refill at a steady rate up to a cap; each request spends one. Bursts allowed up to bucket size.<br>
+_Handles bursty real-world traffic well, cheap to implement, widely supported in Redis/nginx/cloud gateways. Slightly looser than strict per-window limits._
 
-`2)` **Sliding window**
-_Smooth, accurate per-interval limits without edge spikes. Heavier state per key._
+`2)` **Sliding window (log or counter)**<br>
+Tracks requests across a rolling time window, either by timestamp log or weighted counter across two fixed windows.<br>
+_Most accurate limit enforcement, no edge-of-window burst exploit. Higher memory (log) or moderate complexity (counter); overkill unless you need precise fairness._
 
-`3)` **Leaky bucket**
-_Enforces a strictly constant outflow rate. Best when downstream needs smoothing, not burst tolerance._
+`3)` **Leaky bucket**<br>
+Requests queue and drain at a fixed rate; overflow is rejected. Smooths output to a constant flow.<br>
+_Great when the downstream needs steady pacing (e.g. shaping outbound calls). Rejects bursts even when capacity exists, and queueing adds latency — wrong default for user-facing APIs._
 
-`4)` **Fixed window**
-_Cheapest and simplest, but allows 2x burst at window boundaries._
+`4)` **Fixed window**<br>
+Counter per clock-aligned window (e.g. per minute); resets at boundary.<br>
+_Trivial to build and reason about. Allows 2x burst at window boundaries, which is usually unacceptable for abuse protection._
 
-**Assumption:** Your traffic has legitimate bursts (most APIs do) and you're protecting throughput, not smoothing a fragile downstream.
+**Assumption:** traffic is bursty (human/client-driven), not a steady machine-to-machine stream.
 
-**Recommendation:** `1)` Token bucket — best default for an API, tolerates real-world bursts while capping sustained rate.
+**Recommendation:** `1)` token bucket — best balance of burst tolerance, simplicity, and ecosystem support.
 
-_**Next step:** Accept `1)`, pick another, or correct the assumption._
+_**Next step:** accept, pick another, or correct the assumption._
 
 </td>
 </tr>
