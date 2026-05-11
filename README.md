@@ -26,134 +26,199 @@ _The opinions_
 
 - 1️⃣ Only one question per turn. Never ask multiple questions at a time
 - 🙌 Questions and options are phrased in positive language so it's easy to say "yes" to things (no double negatives)
-- ⬇️ Every question orders recommendations in order from most to least recommended paths forward
+- ⬇️ Every question orders proposals and options in order from most to least recommended paths forward
 - 💅 Leveraging consistent markdown formatting to make it easy to predictably parse outputs (super helpful when you have to answer lots of questions!)
 - 🧘 What you need to do for every turn should be obvious (answer a question, provide more details, etc)
 
-#### Compared to `/grill-me`
+#### `/grill-me` vs `/cook-me` output
 
-The same prompt run through each skill independently. Two scenarios — opening a session (clarifying intent) and picking between named options (a recommendation decision).
+To better understand what `/cook-me` does, below is listed out a output comparison between `/grill-me` and `/cook-me`. All below output was captured with `Opus 4.7 (Anthropic)`.
 
-##### Clarifying intent
+#### Model asking clarifying questions
 
-Prompt: _"I want to add rate limiting to my API"._
+**Prompt**:
+> `"I want to add rate limiting to my API"`
+
+_What `/cook-me` brings_
+
+- 🎯 Candidates are numbered and explicitly ordered (no guessing which is the recommended path)
+- 🪜 3 lines per candidate: the name, what it is, then why it matters (easy to skim, easy to compare)
+- 💡 Rationales call out the non-obvious gotcha, not generic "pushes toward X" template language
+- 👉 The final `**Next step:**` line makes the action obvious — no wondering what to do
+
+<details>
+<summary>See the full output comparison</summary>
+
+<br>
 
 <table>
 <tr>
-<th><code>/grill-me</code> output</th>
-<th><code>/cook-me</code> output</th>
+<th width="50%"><code>/grill-me</code> output</th>
+<th width="50%"><code>/cook-me</code> output</th>
 </tr>
 <tr>
 <td valign="top">
 
-Let's start at the top of the tree.
+Before we dive into the design tree, I need to anchor on the *why* — every downstream decision (algorithm, storage, granularity, failure mode) cascades from this.
 
-**Question 1: What's the primary goal of this rate limiter?**
+**What's the primary problem you're trying to solve with rate limiting?**
 
-The answer shapes almost every downstream decision (algorithm, storage, key strategy, response behavior), so I want to pin it before we go deeper.
+A few common motivations, and they pull the design in very different directions:
 
-Common goals, roughly in order of how often they're the real driver:
+1. **Protecting infrastructure from overload** — preventing a traffic spike (organic or accidental) from taking down your service. Usually points toward coarse, global limits and aggressive shedding.
+2. **Preventing abuse / DoS** — stopping malicious actors from hammering endpoints. Usually points toward per-IP or per-credential limits with hard blocks and possibly escalating penalties.
+3. **Enforcing fair usage between tenants** — making sure one noisy customer doesn't degrade experience for others. Usually points toward per-account/per-key quotas with isolation guarantees.
+4. **Monetization / plan tiers** — free vs. paid users get different ceilings. Usually points toward per-customer quotas tied to billing, with clear 429 semantics and upgrade paths.
+5. **Protecting a downstream dependency** — e.g., you call a third-party API with its own limits and need to stay under them. Points toward outbound rate limiting, not inbound.
 
-- **a) Abuse prevention** — stop scrapers, credential stuffing, brute force. Tends to want aggressive per-IP limits and hard blocks.
-- **b) Fair-use / multi-tenant fairness** — stop one customer from starving others. Wants per-account quotas, often tiered by plan.
-- **c) Cost control** — protect an expensive downstream (LLM tokens, third-party API, DB). Wants limits tied to resource consumption, not just request count.
-- **d) Infrastructure protection** — keep the service from falling over under load. Often better served by load shedding / concurrency limits than classical rate limiting.
-- **e) Compliance / contractual** — you've published a "100 req/min" SLA and need to enforce it.
+**My recommendation:** start by picking the *single* dominant motivation. Most teams try to solve all five with one system and end up with something that does none well. If more than one applies, rank them — we'll design for the top one and check the others as constraints, not co-equal goals.
 
-**My recommendation: (b) fair-use, per-authenticated-account**, unless you tell me otherwise. It's the most common real need for a product API, it composes well with later additions (you can layer per-IP abuse limits on top), and it forces you to think about identity up front — which you'll need anyway.
-
-Which of these is closest to your actual motivation? If it's a mix, which one dominates?
+Which of these is closest to your situation? Or is it something else?
 
 </td>
 <td valign="top">
 
-**`Q1 of ~8.`**
-> What's driving the need — abuse prevention, cost control, or fairness across clients?
+**`Q1 of ~4.`**
+> What's driving the rate limit — abuse prevention, cost control, or fairness across tenants?
 
-The candidates and what they imply:
+**`Candidates`** _(↓ most to least promising)_
 
-`1)` **Abuse / DoS protection**<br>
-Block bursts from a single bad actor before they reach expensive handlers.<br>
-_Pushes toward per-IP or per-token limits with aggressive short windows; fail-closed on the edge (gateway/CDN) is usually right._
+`1)` **Fairness across tenants**<br>
+One tenant's burst shouldn't degrade latency for others sharing the pool.<br>
+_Forces per-tenant keys and usually a token bucket; a global limit "feels fair" but actually lets the loudest tenant consume the whole budget right up to the ceiling._
 
-`2)` **Cost control on downstream resources**<br>
-Cap aggregate load on a DB, paid third-party API, or LLM provider.<br>
-_Pushes toward global or per-resource concurrency limits, not per-client; the limit lives near the expensive call, not the edge._
+`2)` **Cost control**<br>
+Cap spend on a downstream paid dependency (LLM tokens, third-party API, egress).<br>
+_The limit must track the cost unit, not requests — one request can be 100x another, so a request/sec cap leaks budget while looking healthy on dashboards._
 
-`3)` **Fairness across tenants / plan enforcement**<br>
-Stop one customer from starving others, and align usage with billing tiers.<br>
-_Pushes toward per-API-key quotas with longer windows (per-minute, per-day), tier-aware config, and clear `429` headers so clients can self-pace._
+`3)` **Abuse / credential stuffing**<br>
+Stop scrapers, brute-force login, scripted enumeration.<br>
+_Per-IP breaks behind NAT and CGNAT (mobile carriers share IPs across thousands of users); you'll need per-account or per-session keys too, and the 429 itself becomes a signal attackers probe._
 
-`4)` **Belt-and-suspenders — all of the above**<br>
-You want some of each because the API is public and monetized.<br>
-_Realistic for most production APIs, but the layers stack differently and the order matters; worth naming so we sequence the design instead of conflating them._
+`4)` **Protect the service from overload**<br>
+Shed load before the database or worker pool tips over.<br>
+_This is a load-shedding problem, not a rate-limit problem — a fixed RPS cap set for steady state will either throttle legitimate traffic during normal spikes or fail to engage when the real bottleneck (DB connections, queue depth) saturates first._
 
-**Recommendation:** `3)` if this API has authenticated clients on plans; `1)` if it's public and unmonetized. Most teams end up at `4)` but should still pick the primary driver to anchor the design.
+**Recommendation:** Pick the one that would make you ship this week; the others can layer on later with the same infrastructure.
 
-_**Next step:** Pick the primary driver, or tell me more about who calls this API and what hurts when they call it too much._
+_**Next step:** name the primary driver._
 
 </td>
 </tr>
 </table>
 
-##### Choosing an option
+</details>
 
-Prompt: _"I'm adding rate limiting to my API. What algorithm should I use — token bucket, leaky bucket, fixed window, or sliding window?"_
+#### Model providing recommendations
+
+**Prompt**:
+> `"I'm adding rate limiting to my API. What algorithm should I use — token bucket, leaky bucket, fixed window, or sliding window?"`
+
+_What `/cook-me` brings_
+
+- 🛑 Refuses to rank options when intent isn't pinned — runs a clarifying exploration turn first, then the recommendation
+- 🔄 Multi-turn flow keeps each turn focused on one decision (the user's reply between turns is shown explicitly)
+- 🎚️ Stacks `**Assumption:**` lines for the guessable defaults the recommendation rides on — you can correct any of them in-place
+- 🔍 Each option's rationale names the specific operational gotcha (not the textbook contrast you'd read in any rate-limiting blog post)
+
+<details>
+<summary>See the full output comparison</summary>
+
+<br>
 
 <table>
 <tr>
-<th><code>/grill-me</code> output</th>
-<th><code>/cook-me</code> output</th>
+<th width="50%"><code>/grill-me</code> output</th>
+<th width="50%"><code>/cook-me</code> output</th>
 </tr>
 <tr>
 <td valign="top">
 
-**Recommendation: token bucket.**
+**Recommendation: sliding window counter** (or token bucket if you need to allow bursts).
 
-It's the most flexible of the four — it handles steady traffic well, allows controlled bursts (which real clients almost always need), and is cheap to implement (two numbers per key: tokens remaining + last refill timestamp). Stripe, AWS, and GitHub all use it for their public APIs for these reasons.
+Quick contrast:
+- **Fixed window** — simplest, but allows 2x burst at window boundaries (e.g., 100 req at 12:00:59 + 100 req at 12:01:00). Reject unless precision doesn't matter.
+- **Sliding window (log)** — most accurate, but stores every request timestamp. Expensive at scale.
+- **Sliding window (counter)** — approximates sliding-log using two fixed-window counters and a weighted average. Cheap, accurate enough, my default for HTTP APIs.
+- **Token bucket** — best when you want to *allow* controlled bursts (e.g., "100 req/sec sustained, but 500 req burst is fine"). Common for SDKs and internal services.
+- **Leaky bucket** — enforces a *smooth* output rate (queue + constant drain). Right for protecting a downstream that can't tolerate spikes; wrong if you just want to count requests.
 
-Quick contrast for context:
+The choice hinges on what you're actually protecting and how clients behave. So:
 
-- **Leaky bucket** — smooths output to a constant rate. Great for protecting a downstream system that can't handle bursts, but punishes legitimate bursty clients.
-- **Fixed window** — simplest, but has the "double burst at the boundary" problem (a client can fire 2x the limit across a window edge).
-- **Sliding window** — fixes the boundary problem, but costs more memory/CPU and is overkill unless you need precise enforcement.
+**Question 1: What are you rate-limiting and why?**
 
-**First question to nail down before we go further:**
+Concretely:
+- Is this protecting a specific downstream (DB, third-party API, expensive compute) from being overwhelmed, or is it fairness/abuse-prevention across tenants?
+- Per-user, per-IP, per-API-key, or global?
+- Do legitimate clients send bursty traffic (e.g., a UI that fires 10 requests on page load) or steady traffic?
 
-Do your clients have legitimate bursty traffic patterns (e.g., a batch job that fires 50 requests then idles, or a UI that loads several resources on page open)? Or is traffic expected to be roughly steady?
-
-**My guess:** yes, bursty — almost all real API traffic is. If so, token bucket is the right call and we can move on to sizing the bucket (capacity + refill rate). If your traffic is genuinely steady or you're specifically shielding a fragile backend, we should reconsider leaky bucket.
+My guess: it's per-API-key abuse prevention for an HTTP API with somewhat bursty legit clients — in which case **token bucket** wins because it forgives natural bursts while capping sustained rate. But tell me the actual shape and I'll either confirm or switch the recommendation.
 
 </td>
 <td valign="top">
 
-**`Q1 of ~6.`**
-> Which rate-limiting algorithm fits your API?
+**`Q1 of ~3.`**
+> What are you protecting — and from what?
 
-**`Options`** _(best first)_
+**`Candidates`** _(↓ most to least promising)_
+
+`1)` **Expensive backend (DB, downstream API, LLM tokens)**<br>
+You're shielding a resource with real per-call cost or contention.<br>
+_Cost-per-request makes burst tolerance dangerous — one user's "smooth" burst is your pager at 3am when the pool saturates._
+
+`2)` **Abuse / credential stuffing / scraping**<br>
+You're stopping adversaries, not smoothing legitimate traffic.<br>
+_Per-IP keying gets defeated by botnets in a weekend; the algorithm matters less than the identity dimension you key on._
+
+`3)` **Fair-share between tenants on shared infra**<br>
+Noisy-neighbor isolation across customers on one cluster.<br>
+_Global limits give the wrong answer here — a quiet tenant gets throttled because a loud one filled the window._
+
+`4)` **Compliance / contractual quota (e.g., "10k req/day per plan")**<br>
+Billing or SLA enforcement, not protection.<br>
+_This is accounting, not rate limiting — durability and audit trail matter more than algorithm choice._
+
+**Recommendation:** `1)` — most common reason teams reach for rate limiting, and the algorithm choice genuinely hinges on it.
+
+_**Next step:** pick one, or describe the threat in your own words._
+
+---
+
+**User picks `1)` Expensive backend (DB, downstream API, LLM tokens)**
+
+---
+
+**`Q2 of ~3.`**
+> Which algorithm for protecting an expensive backend?
+
+**`Options`** _(↓ most to least recommended)_
 
 `1)` **Token bucket**<br>
-Tokens refill at a steady rate up to a cap; each request spends one. Bursts allowed up to bucket size.<br>
-_Handles bursty real-world traffic well, cheap to implement, widely supported in Redis/nginx/cloud gateways. Slightly looser than strict per-window limits._
+Refill at steady rate, allow bursts up to bucket size; reject when empty.<br>
+_The bucket size is a knob you can tune per-route without redeploying limits — and crucially, it absorbs retry storms after a brief outage instead of amplifying them like fixed-window would at the boundary._
 
-`2)` **Sliding window (log or counter)**<br>
-Tracks requests across a rolling time window, either by timestamp log or weighted counter across two fixed windows.<br>
-_Most accurate limit enforcement, no edge-of-window burst exploit. Higher memory (log) or moderate complexity (counter); overkill unless you need precise fairness._
+`2)` **Sliding window (log or weighted)**<br>
+Track requests over a rolling time range.<br>
+_Accurate, but the log variant stores a timestamp per request in Redis — at 10k RPS per key that's a hot key with O(N) trimming; the weighted-counter approximation is what people actually ship._
 
-`3)` **Leaky bucket**<br>
-Requests queue and drain at a fixed rate; overflow is rejected. Smooths output to a constant flow.<br>
-_Great when the downstream needs steady pacing (e.g. shaping outbound calls). Rejects bursts even when capacity exists, and queueing adds latency — wrong default for user-facing APIs._
+`3)` **Leaky bucket (queue)**<br>
+Requests queue and drain at fixed rate; overflow rejects.<br>
+_Smooths perfectly but adds latency by design — your p99 now includes queue wait, which is invisible in your "requests per second" dashboards and shows up as mystery slowness downstream._
 
 `4)` **Fixed window**<br>
-Counter per clock-aligned window (e.g. per minute); resets at boundary.<br>
-_Trivial to build and reason about. Allows 2x burst at window boundaries, which is usually unacceptable for abuse protection._
+Count per calendar minute/hour, reset at boundary.<br>
+_The boundary-doubling problem is real: a client can fire 2x your limit in 2 seconds straddling the reset — exactly the burst your expensive backend can't handle._
 
-**Assumption:** traffic is bursty (human/client-driven), not a steady machine-to-machine stream.
+**Assumption:** You're keying per-user (or per-API-key), not globally — global limits on an expensive backend usually mean you bought the wrong size backend.
 
-**Recommendation:** `1)` token bucket — best balance of burst tolerance, simplicity, and ecosystem support.
+**Assumption:** You're running this in Redis or similar shared store, not in-process — in-process limiters silently allow N × replicas of your stated limit.
 
-_**Next step:** accept, pick another, or correct the assumption._
+**Recommendation:** `1)` Token bucket — burst tolerance plus simple Redis primitives (`INCR` + TTL or Lua script), and it's what every major API gateway ships by default for a reason.
+
+_**Next step:** accept `1)`, pick another, or correct an assumption._
 
 </td>
 </tr>
 </table>
+
+</details>
