@@ -83,19 +83,19 @@ Which of these is closest to your situation? Or is it something else?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1)` **Fairness across tenants**<br>
+`1.` **Fairness across tenants**<br>
 One tenant's burst shouldn't degrade latency for others sharing the pool.<br>
 _Forces per-tenant keys and usually a token bucket; a global limit "feels fair" but actually lets the loudest tenant consume the whole budget right up to the ceiling._
 
-`2)` **Cost control**<br>
+`2.` **Cost control**<br>
 Cap spend on a downstream paid dependency (LLM tokens, third-party API, egress).<br>
 _The limit must track the cost unit, not requests — one request can be 100x another, so a request/sec cap leaks budget while looking healthy on dashboards._
 
-`3)` **Abuse / credential stuffing**<br>
+`3.` **Abuse / credential stuffing**<br>
 Stop scrapers, brute-force login, scripted enumeration.<br>
 _Per-IP breaks behind NAT and CGNAT (mobile carriers share IPs across thousands of users); you'll need per-account or per-session keys too, and the 429 itself becomes a signal attackers probe._
 
-`4)` **Protect the service from overload**<br>
+`4.` **Protect the service from overload**<br>
 Shed load before the database or worker pool tips over.<br>
 _This is a load-shedding problem, not a rate-limit problem — a fixed RPS cap set for steady state will either throttle legitimate traffic during normal spikes or fail to engage when the real bottleneck (DB connections, queue depth) saturates first._
 
@@ -118,6 +118,7 @@ _What `/cook-me` brings_
 
 - 🛑 Refuses to rank options when intent isn't pinned — runs a clarifying exploration turn first, then the recommendation
 - 🔄 Multi-turn flow keeps each turn focused on one decision (the user's reply between turns is shown explicitly)
+- 🗺️ Each candidate names where it leads inline (e.g. `` `Leads to →` token bucket ``), so you can pattern-match or short-circuit without waiting for the next turn — no mental mapping between sections
 - 🎚️ Stacks `**Assumption:**` lines for the guessable defaults the recommendation rides on — you can correct any of them in-place
 - 🔍 Each option's rationale names the specific operational gotcha (not the textbook contrast you'd read in any rate-limiting blog post)
 
@@ -157,65 +158,69 @@ My guess: it's per-API-key abuse prevention for an HTTP API with somewhat bursty
 </td>
 <td valign="top">
 
-**`Q1 of ~3.`**
-> What are you protecting — and from what?
+**`Q1 of ~2.`**
+> What are you protecting against?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1)` **Expensive backend (DB, downstream API, LLM tokens)**<br>
-You're shielding a resource with real per-call cost or contention.<br>
-_Cost-per-request makes burst tolerance dangerous — one user's "smooth" burst is your pager at 3am when the pool saturates._
+`1.` **Backend overload from bursty clients**<br>
+Your DB, downstream service, or worker pool falls over under spikes. Limit exists to keep infra alive.<br>
+_Burst tolerance matters more than fairness — a strict limit that rejects legitimate bursts costs more than it saves._<br>
+`Leads to →` token bucket (absorbs retry storms without dropping legit traffic)
 
-`2)` **Abuse / credential stuffing / scraping**<br>
-You're stopping adversaries, not smoothing legitimate traffic.<br>
-_Per-IP keying gets defeated by botnets in a weekend; the algorithm matters less than the identity dimension you key on._
+`2.` **Per-user abuse / fairness across tenants**<br>
+One account scraping or looping shouldn't degrade others. Limit is per-identity, not global.<br>
+_Boundary-reset exploits (1000 req at 11:59:59, 1000 more at 12:00:00) are the actual failure mode here, not raw throughput._<br>
+`Leads to →` sliding window per-account (closes the boundary-reset exploit)
 
-`3)` **Fair-share between tenants on shared infra**<br>
-Noisy-neighbor isolation across customers on one cluster.<br>
-_Global limits give the wrong answer here — a quiet tenant gets throttled because a loud one filled the window._
+`3.` **Cost control on a paid downstream (LLM, SMS, geocoding)**<br>
+Each call costs real money. Limit caps spend, not load.<br>
+_Rate-limiting is the wrong primitive — you want a budget/quota with hard cutoff, because spend doesn't recover when the window rolls over._<br>
+`Leads to →` budget/quota with circuit breaker (rate limit is the wrong tool)
 
-`4)` **Compliance / contractual quota (e.g., "10k req/day per plan")**<br>
-Billing or SLA enforcement, not protection.<br>
-_This is accounting, not rate limiting — durability and audit trail matter more than algorithm choice._
+`4.` **Compliance / contractual SLA enforcement**<br>
+"Free tier: 100 req/day" is in the contract. Limit is a billing boundary.<br>
+_Algorithm is irrelevant; correctness of the counter (durable, survives restarts, no double-count across replicas) is the whole problem._<br>
+`Leads to →` durable counter in Redis/DB (algorithm choice doesn't matter)
 
-**Recommendation:** `1)` — most common reason teams reach for rate limiting, and the algorithm choice genuinely hinges on it.
+**Recommendation:** `1.` — most "I'm adding rate limiting" questions are really "my backend is getting hammered."
 
-_**Next step:** pick one, or describe the threat in your own words._
+_**Next step:** pick a candidate or name a different threat._
 
 ---
 
-**User picks `1)` Expensive backend (DB, downstream API, LLM tokens)**
+**User picks `1.` Backend overload from bursty clients**
 
 ---
 
-**`Q2 of ~3.`**
-> Which algorithm for protecting an expensive backend?
+**`Q2 of ~2.`**
+> Which algorithm for absorbing bursts while protecting the backend?
 
 **`Options`** _(↓ most to least recommended)_
 
-`1)` **Token bucket**<br>
-Refill at steady rate, allow bursts up to bucket size; reject when empty.<br>
-_The bucket size is a knob you can tune per-route without redeploying limits — and crucially, it absorbs retry storms after a brief outage instead of amplifying them like fixed-window would at the boundary._
+`1.` **Token bucket**<br>
+Refill at steady rate, burst up to bucket size. Clients can spend accumulated tokens for legitimate spikes.<br>
+_Survives retry storms gracefully — when downstream recovers, the bucket has refilled and clients drain naturally, instead of synchronizing on a window boundary and re-DDoSing you._
 
-`2)` **Sliding window (log or weighted)**<br>
-Track requests over a rolling time range.<br>
-_Accurate, but the log variant stores a timestamp per request in Redis — at 10k RPS per key that's a hot key with O(N) trimming; the weighted-counter approximation is what people actually ship._
+`2.` **Sliding window (log or weighted)**<br>
+Track requests over a rolling interval; smooth, no boundary effects.<br>
+_Memory cost scales with request volume per key (log variant) or you accept approximation error (weighted variant) — fine for per-user limits, expensive for a global high-QPS limit._
 
-`3)` **Leaky bucket (queue)**<br>
-Requests queue and drain at fixed rate; overflow rejects.<br>
-_Smooths perfectly but adds latency by design — your p99 now includes queue wait, which is invisible in your "requests per second" dashboards and shows up as mystery slowness downstream._
+`3.` **Leaky bucket**<br>
+Queue requests, drain at fixed rate. Smooths output completely.<br>
+_Adds latency by design — requests wait in the queue. Wrong choice if your backend can handle bursts at all, because you're rate-limiting yourself harder than necessary._
 
-`4)` **Fixed window**<br>
-Count per calendar minute/hour, reset at boundary.<br>
-_The boundary-doubling problem is real: a client can fire 2x your limit in 2 seconds straddling the reset — exactly the burst your expensive backend can't handle._
+`4.` **Fixed window**<br>
+Counter resets every N seconds. Simplest to implement.<br>
+_Boundary exploit: a client can fire 2x the limit by stacking requests at the window edge. Also synchronizes retry storms across all clients at reset time — exactly the failure mode you're trying to prevent._
 
-**Assumption:** You're keying per-user (or per-API-key), not globally — global limits on an expensive backend usually mean you bought the wrong size backend.
+**Assumption:** your backend can handle short bursts (it's sustained load that kills it), so you want burst tolerance not smoothing.
 
-**Assumption:** You're running this in Redis or similar shared store, not in-process — in-process limiters silently allow N × replicas of your stated limit.
+**Assumption:** you're storing state in Redis or similar — token bucket is `INCR` + `EXPIRE` + a timestamp, not meaningfully harder than fixed window.
 
-**Recommendation:** `1)` Token bucket — burst tolerance plus simple Redis primitives (`INCR` + TTL or Lua script), and it's what every major API gateway ships by default for a reason.
+**Recommendation:** `1.` token bucket.
 
-_**Next step:** accept `1)`, pick another, or correct an assumption._
+_**Next step:** accept `1.`, pick another, or correct an assumption._
 
 </td>
 </tr>
