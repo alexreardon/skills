@@ -11,10 +11,10 @@ Sub-agent runs comparing the two skills across 6 prompts of varying shape. Each 
 5. [Migration strategy](./05-migration.md) — specific technical scenario, multi-step
 6. [Monorepo decision](./06-monorepo.md) — strategic yes/no, multi-driver
 
-See [REVIEW.md](./REVIEW.md) for the full assessment and the pass-by-pass iteration history (passes 5–8) that converged on the current state.
+See [REVIEW.md](./REVIEW.md) for the full assessment and the pass-by-pass iteration history (passes 5–9) that converged on the current state.
 
 ---
 
-Cook-me outputs in each comparison file reflect the latest validated run (pass 8 — all 6 prompts format-clean, every rationale leads with the bite). Grill-me outputs are unchanged from the original capture.
+Cook-me outputs in each comparison file reflect the latest validated run (pass 9 — all 6 prompts format-clean, every rationale leads with the bite, plural `Leads to →` destinations exercised throughout). Grill-me outputs are unchanged from the original capture.
 
 All outputs captured via parallel sub-agent runs (`general-purpose` agent, simulating Claude Code) against the latest [cook-me SKILL.md](../skills/cook-me/SKILL.md) and the upstream [grill-me SKILL.md](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md).

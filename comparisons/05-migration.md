@@ -18,39 +18,36 @@ Which one applies to you?
 ## `/cook-me` output
 
 **`Q1 of ~8.`**
-> What's forcing the migration — new columns, type changes, normalization, partitioning, or something else?
+> What's forcing the migration — is the new schema a backwards-compatible additive change, or a breaking restructure (renames, type changes, splits)?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Additive schema change**<br>
-New columns or indexes; old readers stay valid throughout.<br>
-_Backfill is the only real risk; you can ship app changes lazily since old code keeps working._<br>
-`Leads to →` expand-contract with a backfill job
+`1.` **Breaking restructure**<br>
+Columns renamed, split, retyped, or moved across tables; old and new shapes can't coexist behind one view.<br>
+_Dual-writes and backfill become unavoidable; the migration tool choice hinges entirely on this answer._<br>
+`Leads to →` pgroll, pg-osc, Debezium CDC (+ more)
 
-`2.` **Type or constraint change**<br>
-Column retypes, NOT NULL adds, FK additions on existing data.<br>
-_Validation cost dominates; a single bad row blocks the whole cutover unless you stage validation separately._<br>
-`Leads to →` shadow column + dual-write
+`2.` **Additive-only**<br>
+New nullable columns or tables; old code keeps working untouched against the same rows.<br>
+_Backfill is the only real risk; you can skip orchestration tooling and ship a plain migration._<br>
+`Leads to →` plain DDL, batched backfill
 
-`3.` **Restructure or split**<br>
-Normalization, table split, or partitioning of the existing table.<br>
-_Read paths fan out; every query and join touching the table needs an audit, not just writers._<br>
-`Leads to →` shadow table + logical replication or triggers
+`3.` **Physical reorg**<br>
+Same logical schema, but repartitioning, reclustering, or reclaiming bloat on the 100M rows.<br>
+_Locks and disk-doubling are the bite, not app compatibility; tooling space is totally different._<br>
+`Leads to →` pg_repack, pg_squeeze, partitioning
 
-`4.` **Full rewrite**<br>
-New table with materially different shape and semantics.<br>
-_Dual-write window is long and app-visible; rollback means keeping both tables hot for weeks._<br>
-`Leads to →` CDC-style sync (e.g. pg_logical, Debezium)
+**Recommendation:** Pin this first — `1.` and `2.` share almost no tooling overlap, and guessing wrong wastes the next 3–4 turns.
 
-**Recommendation:** Pin the shape of the change before picking a strategy — "no downtime on 100M rows" looks very different for `1.` vs `4.`, and the wrong tool here wastes weeks.
-
-_**Next step:** Pick a candidate or describe the actual schema delta._
+_**Next step:** Pick `1.`, `2.`, or `3.`, or describe the schema delta in one line._
 
 ---
 
 ## Notes
 
-- Format clean across all 4 candidates. Brevity caps hold (candidates 9–13 words, rationales 14–18 words).
-- Every rationale leads with the bite: _"Backfill is the only real risk"_ / _"Validation cost dominates"_ / _"Read paths fan out"_ / _"Dual-write window is long and app-visible"_. None reach for directional verbs.
-- Tool names are accurate: `pg_logical`, `Debezium`, expand-contract are all real and correctly applied. The `pgroonga` hallucination from earlier passes does not return.
-- Branch-aware Recommendation calls out the gap explicitly: _"`1.` vs `4.` looks very different"_ — primes the user that the tool pick is downstream of the shape pick.
+- Format clean across all 3 candidates. Brevity caps hold.
+- Every rationale leads with the bite: _"Dual-writes and backfill become unavoidable"_ / _"Backfill is the only real risk"_ / _"Locks and disk-doubling are the bite"_.
+- New `Leads to →` rule heavily exercised. `1.` uses `(+ more)` to honestly signal that the migration tooling space is broader than three names (`pgroll, pg-osc, Debezium CDC (+ more)`); `2.` and `3.` use plural destinations grouped by approach.
+- Tool names accurate: `pgroll`, `pg-osc` (Shayon Mukherjee), `Debezium`, `pg_repack`, `pg_squeeze` are all real and correctly applied to their categories. No `pgroonga` hallucination.
+- Branch-aware Recommendation calls out the gap explicitly: _"`1.` and `2.` share almost no tooling overlap"_ — primes the user that the tool pick is downstream of the shape pick.
+- Model chose 3 candidates here vs 4 in prior passes — the additive/breaking/reorg trichotomy reads cleaner than splitting `1.` further.

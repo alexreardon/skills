@@ -15,45 +15,41 @@ My recommendation: identify the single biggest concrete pain point first. "We ha
 
 ## `/cook-me` output
 
-**`Q1 of ~8.`**
-> What's driving the monorepo question — what pain are you trying to fix?
+**`Q1 of ~6.`**
+> What's driving the monorepo question — pain you're hitting today, or a forward-looking bet?
 
 **`Candidates`** _(↓ most to least promising)_
 
 `1.` **Cross-service change friction**<br>
-Shipping a feature touches multiple repos; PRs, versioning, and release coordination drag.<br>
-_Atomic commits become the prize; without them a monorepo just relocates the same coordination cost._<br>
-`Leads to →` Bazel/Nx/Turborepo + shared CI
+Shipping a feature touches 3+ repos; PRs land out of order, versions drift.<br>
+_Coordination cost is the bite; monorepo collapses it but forces shared tooling decisions._<br>
+`Leads to →` atomic commits, shared CI, version pinning
 
-`2.` **Shared code drift**<br>
-Duplicated libs, types, or contracts diverge across services and break integrations.<br>
-_A shared package boundary is the real fix; monorepo is one delivery vehicle, not the only one._<br>
-`Leads to →` shared packages (mono OR published internal libs)
+`2.` **Shared code duplication**<br>
+Same auth/logging/types copy-pasted across services, drifting independently.<br>
+_Drift causes silent prod bugs; a shared lib in one repo is the fix, not necessarily a monorepo._<br>
+`Leads to →` shared lib, published packages, monorepo
 
-`3.` **Dev environment friction**<br>
-Cloning 12 repos, juggling versions, and spinning up locally is painful for new and existing devs.<br>
-_Tooling (devcontainers, meta-repo) often dissolves this without restructuring source control._<br>
-`Leads to →` meta-repo or devcontainer, not a true monorepo
+`3.` **Onboarding and discoverability**<br>
+New engineers can't find the service that owns X; 12 READMEs, 12 setups.<br>
+_Cognitive load compounds per service; a monorepo fixes browsing but not architectural sprawl._<br>
+`Leads to →` monorepo, service catalog, docs portal
 
-`4.` **Org/ownership confusion**<br>
-Unclear who owns what; discovery and review routing is ad-hoc across 12 repos.<br>
-_CODEOWNERS and a service catalog usually outperform a repo merge here; consolidation can blur ownership further._<br>
-`Leads to →` catalog + CODEOWNERS, defer monorepo
+`4.` **Forward bet on scale**<br>
+No acute pain; you've read Google/Meta posts and want the option value early.<br>
+_Migration cost lands now for benefits that may never arrive; sunk-cost lock-in is the real risk._<br>
+`Leads to →` defer, spike, status quo
 
-`5.` **CI/release fragmentation**<br>
-12 pipelines, 12 release processes, inconsistent quality gates.<br>
-_Pipeline templating (reusable workflows) fixes most of this without a merge; monorepo CI brings its own selective-build problem._<br>
-`Leads to →` shared CI templates
+**Recommendation:** Start with `1.` — cross-service change friction is the most common real driver and the one a monorepo most directly fixes; if it's actually `4.`, the answer is usually "don't."
 
-**Recommendation:** Pin the dominant pain before ranking solutions — monorepo is a heavy migration that only pays off for `1.` and `2.`; `3.`–`5.` have cheaper fixes.
-
-_**Next step:** Pick the candidate that hurts most, or describe the actual pain in your own words._
+_**Next step:** Pick the driver, or describe the pain in your own words._
 
 ---
 
 ## Notes
 
-- Format clean across all 5 candidates. Brevity caps hold (candidates 14–17 words, rationales 17–22 words).
-- Every rationale leads with the bite or the cheaper alternative: _"Atomic commits become the prize"_ / _"A shared package boundary is the real fix"_ / _"Tooling … often dissolves this"_ / _"CODEOWNERS and a service catalog usually outperform a repo merge"_ / _"Pipeline templating fixes most of this without a merge"_.
-- The anti-monorepo bias is now structural: `3.`, `4.`, `5.` each name a cheaper non-monorepo fix in the rationale itself, then route the user away in `Leads to →`. The Recommendation line summarizes: _"only pays off for `1.` and `2.`; `3.`–`5.` have cheaper fixes."_
-- Q1 of ~8 (was ~6 in earlier passes) — model judges this prompt warrants a deeper tree.
+- Format clean across all 4 candidates. Brevity caps hold.
+- Every rationale leads with the bite: _"Coordination cost is the bite"_ / _"Drift causes silent prod bugs"_ / _"Cognitive load compounds per service"_ / _"Migration cost lands now for benefits that may never arrive"_.
+- New `Leads to →` rule fully exercised — all four candidates use plural destinations. `2.` and `3.` deliberately route AWAY from monorepo in the destinations themselves (`shared lib, published packages, monorepo` and `monorepo, service catalog, docs portal`) — the user sees cheaper alternatives at the same scan depth as the heavy migration.
+- `1.`'s destination (`atomic commits, shared CI, version pinning`) is at ~42 chars — slightly over the soft cap. Reads fine but worth flagging as drift if it persists across passes.
+- Anti-monorepo bias is structural: 3 of 4 candidates name a cheaper non-monorepo fix in either the rationale or the destination list. The Recommendation line summarizes: _"if it's actually `4.`, the answer is usually 'don't.'"_

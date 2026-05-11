@@ -13,41 +13,40 @@ What kind of data are you planning to cache first? My recommendation: start with
 
 ## `/cook-me` output
 
-**`Q1 of ~8.`**
-> What problem are you trying to solve with caching?
+**`Q1 of ~6.`**
+> Before ranking cache layers, what problem are you solving — latency, backend load, or cost?
 
 **`Candidates`** _(↓ most to least promising)_
 
 `1.` **Read latency**<br>
-Pages or API responses feel slow; you want sub-100ms responses for hot paths.<br>
-_Staleness becomes the dominant tradeoff; reads are easy to cache but invalidation is where you'll bleed._<br>
-`Leads to →` edge/CDN or in-process cache
+P95/P99 tail latency on hot reads is the felt pain; users notice slow pages.<br>
+_Stale reads become tolerable in exchange for speed; that's the deal you're signing up for._<br>
+`Leads to →` edge cache, CDN, in-memory (+ more)
 
-`2.` **Database load**<br>
-Origin DB is saturated or expensive; you want to absorb repeated identical queries.<br>
-_Thundering herds on cache miss can crater the DB worse than no cache; needs request coalescing._<br>
-`Leads to →` Redis/Memcached in front of DB
+`2.` **Backend / DB load**<br>
+Origin or database is saturating under repeated identical reads; you need to absorb traffic.<br>
+_Thundering herds on miss become the dominant failure mode; single-flight and TTL jitter stop being optional._<br>
+`Leads to →` Redis, read-replica, request coalescing
 
-`3.` **Expensive computation**<br>
-Specific results (rendered pages, ML inference, aggregations) cost CPU/$ to produce.<br>
-_Cache key design becomes the whole game; wrong key granularity either bloats storage or never hits._<br>
-`Leads to →` memoization layer keyed on inputs
+`3.` **Compute / egress cost**<br>
+Recomputation or per-request egress is the budget line item driving the project.<br>
+_Hit-rate directly determines ROI; a 60% hit cache may not pay for its own ops overhead._<br>
+`Leads to →` CDN, materialized views
 
-`4.` **Third-party API cost or rate limits**<br>
-You're paying per call or hitting quotas on an upstream you don't control.<br>
-_Their TTL guidance (or lack of it) dictates yours; you inherit their freshness contract whether stated or not._<br>
-`Leads to →` keyed response cache with vendor-aligned TTL
+`4.` **Personalized / per-user reads**<br>
+Hot paths are user-scoped (feeds, dashboards), so shared caches barely help.<br>
+_Cache keys explode by user; memory budget and eviction policy decide whether this works at all._<br>
+`Leads to →` per-user Redis, session cache
 
-**Recommendation:** Name the bottleneck before picking a layer — `1.` and `2.` look similar but push you to opposite ends of the stack (edge vs. origin-adjacent), and invalidation strategy follows from that pick, not the other way around.
+**Recommendation:** `1.` — latency is the most common real driver and pins which layer (edge vs app vs DB) actually helps; the others reshape the answer enough that ranking layers now would be premature.
 
-_**Next step:** Pick the driver, or describe the symptom in your own words._
+_**Next step:** Pick the dominant driver, or tell me it's a mix and which leads._
 
 ---
 
 ## Notes
 
-- **Caching was the prompt that exposed the directional-language trap across passes 4–7.** Pass 4: _"Pushes cache toward the edge"_. Pass 5: _"Points you at edge or in-process caches"_. Pass 6: _"Shifts the conversation to shared caches"_. Pass 7: _"Pulls cache close to the read path"_ + _"Pushes state to client/edge"_. The model kept dodging the explicit verb list with synonyms.
-- **Pass 8: fully clean.** Every rationale now leads with the **bite**: _"Staleness becomes the dominant tradeoff"_ / _"Thundering herds on cache miss can crater the DB worse than no cache"_ / _"Cache key design becomes the whole game"_ / _"Their TTL guidance dictates yours"_. The location appears in `Leads to →` (where it belongs), not as the rationale's lead.
-- The fix that landed: a worked WRONG → RIGHT example in the `Before submitting` checklist showing how the same information can be reordered so the bite leads. Verb-list bans alone weren't enough.
+- **Caching was the prompt that exposed the directional-language trap across passes 4–7** (rationales kept leading with location words like _"Pushes cache toward the edge"_). Pass 8's worked WRONG → RIGHT example fixed it; this pass holds the line — all four rationales lead with the bite: _"Stale reads become tolerable"_ / _"Thundering herds on miss become the dominant failure mode"_ / _"Hit-rate directly determines ROI"_ / _"Cache keys explode by user"_.
+- **New `Leads to →` rule fully exercised.** All 4 candidates use plural destinations; `1.` even uses `(+ more)` for overflow (`edge cache, CDN, in-memory (+ more)`). Caching is a layered space — there's almost never one right cache — so plural reads more honestly here than singular.
+- Branch-aware Recommendation: pins `1.` while noting `2.` would push you to opposite ends of the stack — primes the user that "where" follows from "why."
 - Format clean across all 4 candidates. Brevity caps hold.
-- Branch-aware Recommendation: _"`1.` and `2.` look similar but push you to opposite ends of the stack"_ — names the trap before pinning a pick.

@@ -74,30 +74,34 @@ Which of these is closest to your situation? Or is it something else?
 </td>
 <td valign="top">
 
-**`Q1 of ~4.`**
-> What's driving the rate limit — abuse prevention, cost control, or fairness across tenants?
+**`Q1 of ~7.`**
+> What's pushing you toward rate limiting right now?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Fairness across tenants**<br>
-One tenant's burst shouldn't degrade latency for others sharing the pool.<br>
-_Forces per-tenant keys and usually a token bucket; a global limit "feels fair" but actually lets the loudest tenant consume the whole budget right up to the ceiling._
+`1.` **Abuse / cost control**<br>
+A few clients are hammering endpoints and inflating infra bills or crowding out others.<br>
+_Fairness becomes the real constraint, not throughput; per-identity limits beat global caps._<br>
+`Leads to →` token bucket, leaky bucket (+ more)
 
-`2.` **Cost control**<br>
-Cap spend on a downstream paid dependency (LLM tokens, third-party API, egress).<br>
-_The limit must track the cost unit, not requests — one request can be 100x another, so a request/sec cap leaks budget while looking healthy on dashboards._
+`2.` **Upstream protection**<br>
+A downstream dependency (DB, third-party API, LLM) buckles under bursts you can't absorb.<br>
+_The limit must match the weakest link's ceiling, not your own; misalignment causes cascading failures._<br>
+`Leads to →` concurrency cap, queue, circuit breaker
 
-`3.` **Abuse / credential stuffing**<br>
-Stop scrapers, brute-force login, scripted enumeration.<br>
-_Per-IP breaks behind NAT and CGNAT (mobile carriers share IPs across thousands of users); you'll need per-account or per-session keys too, and the 429 itself becomes a signal attackers probe._
+`3.` **Compliance / billing tiers**<br>
+Plans or contracts promise N requests/min and you need to enforce the SLA.<br>
+_Quota accounting now needs to survive restarts and be auditable; in-memory counters won't cut it._<br>
+`Leads to →` Redis counters, sliding window
 
-`4.` **Protect the service from overload**<br>
-Shed load before the database or worker pool tips over.<br>
-_This is a load-shedding problem, not a rate-limit problem — a fixed RPS cap set for steady state will either throttle legitimate traffic during normal spikes or fail to engage when the real bottleneck (DB connections, queue depth) saturates first._
+`4.` **Defense in depth**<br>
+No specific fire — you want a sane ceiling before something bad happens.<br>
+_Without a real signal, limits get set by vibes and either never trigger or block real users._<br>
+`Leads to →` edge limit (Cloudflare, nginx)
 
-**Recommendation:** Pick the one that would make you ship this week; the others can layer on later with the same infrastructure.
+**Recommendation:** `1.` is the most common driver and the answer reshapes everything downstream — algorithm, storage, key (IP vs user vs API key), and where the limit lives.
 
-_**Next step:** name the primary driver._
+_**Next step:** Pick the closest match or describe the actual trigger in your own words._
 
 </td>
 </tr>
@@ -150,69 +154,67 @@ My guess: it's per-API-key abuse prevention for an HTTP API with somewhat bursty
 </td>
 <td valign="top">
 
-**`Q1 of ~2.`**
-> What are you protecting against?
+**`Q1 of ~5.`**
+> What are you actually protecting against? Different threats pick different algorithms.
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Backend overload from bursty clients**<br>
-Your DB, downstream service, or worker pool falls over under spikes. Limit exists to keep infra alive.<br>
-_Burst tolerance matters more than fairness — a strict limit that rejects legitimate bursts costs more than it saves._<br>
-`Leads to →` token bucket (absorbs retry storms without dropping legit traffic)
+`1.` **Abusive bursts from individual clients**<br>
+One client hammers your API, starving everyone else.<br>
+_Per-key fairness becomes the dominant concern; global throughput is fine._<br>
+`Leads to →` token bucket, sliding window
 
-`2.` **Per-user abuse / fairness across tenants**<br>
-One account scraping or looping shouldn't degrade others. Limit is per-identity, not global.<br>
-_Boundary-reset exploits (1000 req at 11:59:59, 1000 more at 12:00:00) are the actual failure mode here, not raw throughput._<br>
-`Leads to →` sliding window per-account (closes the boundary-reset exploit)
+`2.` **Backend capacity protection**<br>
+A downstream DB or service has a hard concurrency ceiling.<br>
+_Aggregate cap matters more than per-client fairness; queueing semantics start to dominate._<br>
+`Leads to →` leaky bucket, concurrency limiter
 
-`3.` **Cost control on a paid downstream (LLM, SMS, geocoding)**<br>
-Each call costs real money. Limit caps spend, not load.<br>
-_Rate-limiting is the wrong primitive — you want a budget/quota with hard cutoff, because spend doesn't recover when the window rolls over._<br>
-`Leads to →` budget/quota with circuit breaker (rate limit is the wrong tool)
+`3.` **Cost control on metered dependencies**<br>
+Each request burns paid quota (LLM tokens, third-party API calls).<br>
+_Hard monthly ceilings beat smooth shaping; overage is a billing event, not latency._<br>
+`Leads to →` fixed window, quota counter
 
-`4.` **Compliance / contractual SLA enforcement**<br>
-"Free tier: 100 req/day" is in the contract. Limit is a billing boundary.<br>
-_Algorithm is irrelevant; correctness of the counter (durable, survives restarts, no double-count across replicas) is the whole problem._<br>
-`Leads to →` durable counter in Redis/DB (algorithm choice doesn't matter)
+`4.` **Brute-force / credential stuffing**<br>
+Attackers probing auth endpoints with stolen credentials.<br>
+_False negatives leak accounts; per-IP+per-account compound keys matter more than algorithm choice._<br>
+`Leads to →` sliding window, exponential backoff
 
-**Recommendation:** `1.` — most "I'm adding rate limiting" questions are really "my backend is getting hammered."
+**Recommendation:** `1.` — most public APIs start here, and it's the only driver that meaningfully constrains the four algorithms you listed.
 
-_**Next step:** pick a candidate or name a different threat._
-
----
-
-**User picks `1.` Backend overload from bursty clients**
+_**Next step:** Pick the driver, or name a different threat I missed._
 
 ---
 
-**`Q2 of ~2.`**
-> Which algorithm for absorbing bursts while protecting the backend?
+**User picks `1.` Abusive bursts from individual clients**
+
+---
+
+**`Q2 of ~5.`**
+> Given per-client fairness is the goal, which algorithm?
 
 **`Options`** _(↓ most to least recommended)_
 
 `1.` **Token bucket**<br>
-Refill at steady rate, burst up to bucket size. Clients can spend accumulated tokens for legitimate spikes.<br>
-_Survives retry storms gracefully — when downstream recovers, the bucket has refilled and clients drain naturally, instead of synchronizing on a window boundary and re-DDoSing you._
+Each client accrues tokens at a steady rate up to a cap; requests spend tokens.<br>
+_Legitimate bursts pass through cleanly; the burst cap is a second knob you have to tune and defend._
 
-`2.` **Sliding window (log or weighted)**<br>
-Track requests over a rolling interval; smooth, no boundary effects.<br>
-_Memory cost scales with request volume per key (log variant) or you accept approximation error (weighted variant) — fine for per-user limits, expensive for a global high-QPS limit._
+`2.` **Sliding window (log or counter)**<br>
+Tracks request timestamps in a rolling window per client.<br>
+_Memory grows with request volume per key; accurate but the priciest to run at scale._
 
 `3.` **Leaky bucket**<br>
-Queue requests, drain at fixed rate. Smooths output completely.<br>
-_Adds latency by design — requests wait in the queue. Wrong choice if your backend can handle bursts at all, because you're rate-limiting yourself harder than necessary._
+Requests queue and drain at a fixed rate; overflow is rejected.<br>
+_Bursts get smoothed into latency instead of rejection; clients see slow responses, not 429s._
 
 `4.` **Fixed window**<br>
-Counter resets every N seconds. Simplest to implement.<br>
-_Boundary exploit: a client can fire 2x the limit by stacking requests at the window edge. Also synchronizes retry storms across all clients at reset time — exactly the failure mode you're trying to prevent._
+Counter per client resets every N seconds.<br>
+_Boundary-crossing bursts let clients send 2x the limit in a two-second span; cheapest but leakiest._
 
-**Assumption:** your backend can handle short bursts (it's sustained load that kills it), so you want burst tolerance not smoothing.
+**Assumption:** Your traffic has legitimate bursts (most user-facing APIs do) and you're willing to run Redis or similar for shared counter state.
 
-**Assumption:** you're storing state in Redis or similar — token bucket is `INCR` + `EXPIRE` + a timestamp, not meaningfully harder than fixed window.
+**Recommendation:** `1.` — token bucket absorbs real bursts without punishing well-behaved clients, and the two knobs (rate, burst) map cleanly to the limits you'll publish.
 
-**Recommendation:** `1.` token bucket.
-
-_**Next step:** accept `1.`, pick another, or correct an assumption._
+_**Next step:** Accept `1.`, pick another, or correct the assumption._
 
 </td>
 </tr>

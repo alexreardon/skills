@@ -25,39 +25,39 @@ Which one is yours?
 ## `/cook-me` output
 
 **`Q1 of ~6.`**
-> What does this app actually need state to do?
+> What kind of app are you building, and what's pulling you toward a dedicated library?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Server data dominates**<br>
-Most "state" is fetched from APIs — lists, details, mutations, caching, refetching.<br>
-_Client lib choice barely matters once a server-cache owns the hot path; picking Redux/Zustand here solves the wrong problem._<br>
-`Leads to →` React Query / RTK Query (then a tiny client store for the rest)
+`1.` **Server state dominates**<br>
+Most of your state is API data — lists, details, mutations, caching.<br>
+_The library war is moot here; Redux/Zustand will reinvent caching badly compared to a server-state tool._<br>
+`Leads to →` React Query, SWR, RTK Query
 
-`2.` **Cross-tree client state**<br>
-Auth, theme, modals, wizards, selections shared across distant components.<br>
-_Prop-drilling pain is real but small; the pick hinges on whether updates are frequent or rare._<br>
-`Leads to →` Zustand or Jotai (frequent updates) vs Context (rare updates)
+`2.` **Cross-cutting client state**<br>
+Auth, theme, modals, wizards — modest shared state across unrelated trees.<br>
+_Context handles this fine until re-renders bite; the bite arrives later than people expect._<br>
+`Leads to →` Context, Zustand
 
-`3.` **Complex local domain logic**<br>
-Undo/redo, collaborative editing, derived graphs, normalized entities with relationships.<br>
-_Reducers and middleware earn their weight here; lighter libs force you to rebuild the same machinery yourself._<br>
+`3.` **Complex client-only state**<br>
+Editors, builders, multi-step flows with derived/atomic state and undo.<br>
+_Granular reactivity becomes load-bearing; coarse stores cause cascading re-renders that profile poorly._<br>
+`Leads to →` Jotai, Zustand, Redux Toolkit
+
+`4.` **Team/scale-driven**<br>
+Large team, strict conventions, devtools and middleware matter more than ergonomics.<br>
+_Boilerplate stops being the cost; debuggability and predictable patterns dominate the calculus._<br>
 `Leads to →` Redux Toolkit
 
-`4.` **Mostly local component state**<br>
-Forms, toggles, hover — state lives near where it's used.<br>
-_A library is overhead you'll regret; `useState` plus a sprinkle of Context covers it._<br>
-`Leads to →` React built-ins only
+**Recommendation:** Most React apps land in `1.` — the four libraries you listed solve a different problem than the one you probably have. Confirm the shape before we rank.
 
-**Recommendation:** Most React apps land on `1.` — the question "which client store" usually evaporates once a server-cache library is in place. Worth confirming before ranking client libs.
-
-_**Next step:** Pick the candidate that fits, or describe the app in a sentence and I'll place it._
+_**Next step:** Pick a candidate, or describe the state that's actually painful._
 
 ---
 
 ## Notes
 
-- Server-vs-client framing stays as `1.` and the recommendation (consistent placement across passes 4–8).
-- Every rationale leads with the bite: _"Client lib choice barely matters"_ / _"Prop-drilling pain is real but small"_ / _"Reducers and middleware earn their weight here"_ / _"A library is overhead you'll regret"_. No directional verbs.
-- Format clean. Brevity caps hold (candidates 9–13 words, rationales 17–22 words).
-- Strongest rationale: `1.`'s _"Client lib choice barely matters once a server-cache owns the hot path; picking Redux/Zustand here solves the wrong problem"_ — names the wrong-problem trap that grill-me's _"the most common mistake I see"_ also flagged.
+- Format clean across all 4 candidates. Brevity caps hold.
+- Every rationale leads with the bite: _"The library war is moot here"_ / _"Context handles this fine until re-renders bite"_ / _"Granular reactivity becomes load-bearing"_ / _"Boilerplate stops being the cost"_.
+- New `Leads to →` rule heavily exercised — 3 of 4 candidates use plural destinations (`React Query, SWR, RTK Query`, `Context, Zustand`, `Jotai, Zustand, Redux Toolkit`). The user can short-circuit by recognizing any name on the list.
+- Server-vs-client framing stays as `1.` and the Recommendation (consistent placement across all passes).

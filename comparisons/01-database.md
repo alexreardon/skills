@@ -25,33 +25,39 @@ Does that match your data shape, or is there something unusual about your domain
 ## `/cook-me` output
 
 **`Q1 of ~6.`**
-> What's the dominant data shape and access pattern you expect in year one?
+> What's the primary access pattern your product is built around?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Relational with evolving schema**<br>
-Tenants, users, billing, audit — entities with foreign keys and ad-hoc reporting needs.<br>
-_Joins and constraints become load-bearing fast in B2B; bolting them on later means rewrites, not migrations._<br>
+`1.` **Relational + transactional**<br>
+Multi-entity joins, invoices, audit trails, reporting across customer accounts.<br>
+_Schema drift bites hardest in B2B; rigid constraints save you from messy customer-specific edge cases later._<br>
 `Leads to →` Postgres
 
-`2.` **Document-shaped per-tenant blobs**<br>
-Flexible nested objects, schema varies by customer, few cross-entity queries.<br>
-_Aggregations across tenants get painful; you'll reach for a warehouse sooner than you think._<br>
-`Leads to →` MongoDB (or Postgres JSONB)
+`2.` **Document-shaped per tenant**<br>
+Each customer stores nested, schema-flexible blobs you rarely join across.<br>
+_Cross-tenant analytics becomes painful later; flexibility upfront trades against reporting pain at scale._<br>
+`Leads to →` Postgres JSONB, MongoDB
 
-`3.` **Known key-value access at scale**<br>
-Every read is by a known ID or composite key, predictable QPS, no ad-hoc queries.<br>
-_Access patterns must be locked at design time; a new query shape can mean a full table redesign._<br>
+`3.` **Key-value at predictable scale**<br>
+Known access keys, single-digit-ms reads, write volumes that would crush a relational primary.<br>
+_Ad-hoc queries become impossible; every new access pattern forces a schema or index migration._<br>
 `Leads to →` DynamoDB
 
-**Recommendation:** Most early B2B SaaS is `1.` — billing, RBAC, and customer-asked reports all want relational shape, and Postgres covers `2.`'s flex via JSONB until you genuinely outgrow it.
+`4.` **Unsure / early-stage**<br>
+You don't yet know the dominant query shape because the product isn't built.<br>
+_Premature optimization bites worst here; picking the wrong specialist locks you out of pivots cheaply._<br>
+`Leads to →` Postgres (default)
 
-_**Next step:** Pick a candidate, or describe your core entities and I'll place you._
+**Recommendation:** `1.` — most B2B SaaS is relational under the hood (accounts, users, billing, audit), and Postgres handles document workloads via JSONB if you need flexibility later.
+
+_**Next step:** Pick a candidate, or describe the dominant query shape and I'll place it._
 
 ---
 
 ## Notes
 
-- Format clean across the board. Brevity caps hold (candidates 12–14 words, rationales 16–20 words).
-- All three rationales lead with the **bite**, not architectural placement: _"Joins and constraints become load-bearing fast"_ / _"Aggregations across tenants get painful"_ / _"Access patterns must be locked at design time"_. None reach for the directional verbs the spec now explicitly bans.
+- Format clean across all 4 candidates. Brevity caps hold.
+- Every rationale leads with the bite: _"Schema drift bites hardest in B2B"_ / _"Cross-tenant analytics becomes painful later"_ / _"Ad-hoc queries become impossible"_ / _"Premature optimization bites worst here"_.
+- New `Leads to →` rule exercised on `2.` (`Postgres JSONB, MongoDB` — plural). Other candidates land naturally on a single destination, which the rule still allows.
 - Recommendation line is branch-aware (notes that JSONB folds in `2.`'s flex case under `1.`).

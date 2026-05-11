@@ -16,38 +16,39 @@ Which is it?
 ## `/cook-me` output
 
 **`Q1 of ~6.`**
-> What's driving the need for background jobs — what work are you trying to move off the request path?
+> What's driving the need — offloading slow work from request handlers, scheduling future/recurring tasks, or coordinating multi-step workflows?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Slow user-triggered work**<br>
-Emails, PDFs, image processing, third-party API calls during requests.<br>
-_Latency dominates the decision; you need durability and retries but can tolerate seconds-to-minutes delay._<br>
-`Leads to →` Redis-backed queue (BullMQ)
+`1.` **Offload slow work**<br>
+Emails, image processing, webhooks — anything making HTTP responses sluggish.<br>
+_Latency is the bite; if a job dies mid-run, the user already got a 200 and won't retry._<br>
+`Leads to →` BullMQ, pg-boss (+ more)
 
-`2.` **Scheduled / recurring work**<br>
-Nightly reports, cleanups, polling, cache warming on a cron.<br>
-_Scheduling semantics dominate; missed-run behavior and overlap prevention matter more than throughput._<br>
-`Leads to →` BullMQ repeatable jobs or Agenda
+`2.` **Scheduled / recurring jobs**<br>
+Nightly reports, cleanup, polling external APIs on a cadence.<br>
+_Missed runs silently compound; you need cron semantics plus catch-up and overlap guards, not just a queue._<br>
+`Leads to →` BullMQ repeatable, Agenda
 
-`3.` **Fan-out / event-driven pipelines**<br>
-One event triggers many downstream steps across services or workers.<br>
-_Topology becomes the hard problem; ordering, idempotency, and DLQs eclipse the "queue library" choice._<br>
-`Leads to →` SQS/SNS, Kafka, or Temporal
+`3.` **Durable workflows**<br>
+Multi-step pipelines with retries, branching, human-in-the-loop, or long waits.<br>
+_State across steps becomes the hard part; ad-hoc queues drift into bespoke orchestrators you'll regret owning._<br>
+`Leads to →` Temporal, Inngest
 
-`4.` **Long-running workflows**<br>
-Multi-step processes spanning minutes-to-days with human approvals or external waits.<br>
-_State persistence across restarts is the bite; ad-hoc queues will drift into a half-built workflow engine._<br>
-`Leads to →` Temporal or Inngest
+`4.` **Fan-out / event processing**<br>
+One event triggers many downstream consumers across services.<br>
+_Ordering and at-least-once delivery dominate; you're really picking a broker, not a job runner._<br>
+`Leads to →` Kafka, NATS, SQS+SNS
 
-**Recommendation:** Most Node apps land on `1.` — pinning which bucket dominates changes the answer materially, so worth confirming before ranking tools.
+**Recommendation:** `1.` — most Node apps reach for background jobs first to unblock request handlers; pinning this changes the entire shortlist.
 
-_**Next step:** Pick the bucket that fits, or describe the actual workload._
+_**Next step:** Pick the closest match, or describe the workload if it spans more than one._
 
 ---
 
 ## Notes
 
-- Format clean across all 4 candidates. Brevity caps hold (candidates 10–13 words, rationales 13–18 words).
-- Every rationale leads with the bite — `4.` even uses the word _"bite"_ verbatim (_"State persistence across restarts is the bite"_), suggesting the model has internalized the rule's vocabulary.
-- Standout rationale: `3.`'s _"Topology becomes the hard problem; ordering, idempotency, and DLQs eclipse the 'queue library' choice"_ — the same _"the framing is wrong"_ move that drove this prompt's previous-pass _"log not a job table"_ moment, now cast as a topology insight rather than a tool comparison.
+- Format clean across all 4 candidates. Brevity caps hold.
+- Every rationale leads with the bite — `1.` even uses the word _"bite"_ verbatim (_"Latency is the bite"_), and the others follow suit (_"Missed runs silently compound"_ / _"State across steps becomes the hard part"_ / _"Ordering and at-least-once delivery dominate"_).
+- New `Leads to →` rule heavily exercised: every candidate lists multiple tools. `1.` uses `(+ more)` to signal there's more beyond `BullMQ, pg-boss`; `4.` lists three brokers because the broker pick depends on existing infra, not job-shape.
+- Standout rationale: `4.`'s _"You're really picking a broker, not a job runner"_ — the same _"the framing is wrong"_ move that previously surfaced as _"log not a job table"_, now cast as a broker-vs-runner reframe.
