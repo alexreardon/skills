@@ -18,11 +18,9 @@ npx skills add alexreardon/skills --skill cook-me
 
 ### [`/cook-me`](skills/cook-me/SKILL.md) 🧑‍🍳
 
-Opinionated version of the [`/grill-me` skill](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md) by [Matt Pocock](https://x.com/mattpocockuk).
+Opinionated version of the [`/grill-me`](https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md) skill by [Matt Pocock](https://x.com/mattpocockuk) that makes `/grill-me` easier to work with through consistent patterns for question asking, language and layout.
 
-The big idea is to make it easier to work with `/grill-me` by encouraging the model to use consistent patterns for question asking, language and layout.
-
-The opinions:
+_The opinions_
 
 - 1️⃣ Only one question per turn. Never ask multiple questions at a time
 - 🙌 Questions and options are phrased in positive language so it's easy to say "yes" to things (no double negatives)
