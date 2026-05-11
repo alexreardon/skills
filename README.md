@@ -25,10 +25,10 @@ Opinionated version of the [`/grill-me`](https://github.com/mattpocock/skills/bl
 _`/cook-me` opinions_
 
 - 1️⃣ Only one question per "turn" (ai output and user response). Never ask multiple questions at a time
-- 🪣 Clearly separate "exploration" from "option selection" per turn
+- 🪣 Put "exploration" and "option selection" in their own turns
 - 🙌 Options phrased in positive language so it's easy to say "yes" to things (no double negatives)
 - ⬇️ Every turn orders proposals and options in order from most to least recommended paths forward
-- 💅 Leveraging consistent markdown formatting to make it easy to predictably parse outputs (super helpful when you have to answer lots of questions!)
+- 💅 Consistent layout and formatting to make it easy to predictably parse outputs (super helpful when you have to answer lots of questions!)
 - 🧘 What you need to do for every turn should be obvious (answer a question, provide more details, etc)
 
 #### `/grill-me` vs `/cook-me` output
@@ -104,7 +104,10 @@ _**Next step:** name the primary driver._
 
 **Prompt:** `"I'm adding rate limiting to my API. What algorithm should I use — token bucket, leaky bucket, fixed window, or sliding window?"`
 
-> 👨‍🍳 **One ingredient at a time!** `/grill-me` put a algorithm recommendation _and_ a follow-up intent question into one turn. `/cook-me` handles them separately. Q1 locks in the intent, Q2 picks the algorithm with that answer in hand (no guessing required! ✨).
+> 👨‍🍳 `/cook-me` breaks down the interaction into two distinct turns.
+>
+> - Q1 is to understand the intent of the change
+> - Q2 is to choose an algorithm based on that intent
 
 <details>
 <summary>Show output comparison</summary>
