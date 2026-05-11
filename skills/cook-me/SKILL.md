@@ -1,6 +1,6 @@
 ---
 name: cook-me
-description: Opinionated design-interview skill. Walks the user down every branch of a plan or design, one tight question at a time, with lettered options ordered by preference. Use when user invokes `/cook-me` or asks to be "cooked" on a plan or design.
+description: Opinionated version of `grill-me`. Walks the user down every branch of a plan or design, one tight question at a time, with lettered options ordered by preference and an explicit recommendation. Use when user invokes `/cook-me` or asks to be "cooked" on a plan or design.
 ---
 
 ## Base behavior (inlined from the `grill-me` skill)
@@ -28,7 +28,7 @@ These rules apply to every turn, whether it is a recommendation, an info request
 Use this exact format when asking the user to accept a recommendation. This is the prescriptive turn type.
 
 - Progress marker on line 1: ``**`Q3 of ~7.`**``. Question on line 2 as a blockquote (prefixed with `> `).
-- Lettered options (`` `a)` ``, `` `b)` ``, `` `c)` ``, ...), ordered top preference to lower. Minimum 2 options; do not pad. The letter and closing paren are wrapped in backticks so they render as inline code (colored) in the terminal.
+- Lettered options (`` `a)` ``, `` `b)` ``, `` `c)` ``, ...), ordered top preference to lower. Use as many options as the decision warrants — one is fine if there's truly one path. Do not pad. The letter and closing paren are wrapped in backticks so they render as inline code (colored) in the terminal.
 - Option `` `a)` `` is always the recommendation. Options live under an ``**`Options`** _(best first)_`` heading. Options have no leading `-`; separate each option with a blank line.
 - Each option's description is bold. The rationale sits on the immediately following line (no blank line between them), flush left (no indent), in italics. Every option, including `` `a)` ``, gets its own rationale line.
 - The final two lines are always, verbatim:
