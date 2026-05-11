@@ -13,12 +13,16 @@ description: Opinionated version of `grill-me`. Walks the user down every branch
 
 ## Shared principles (apply to every turn)
 
+- Understand intent before recommending. Open with `Exploration turns` to surface the goal and candidate space; reach for `Recommendation turns` once a decision can be ranked.
 - Ask exactly one thing at a time. Never group.
 - Always make obvious what the user needs to do next — answer a question, provide insight, pick an option, etc.
 - Use the fewest words possible without losing accuracy. No preamble, no filler, no summaries.
 - Phrase questions and options so the affirmative path is easy to take. Avoid double negatives in both the question and the options the user picks from. Example: avoid "Should we not skip validation?", prefer "Should we run validation?".
 - Visual rhythm is consistent across turn types:
-  - Bold + backticked keyword headers mark each section (e.g. ``**`Findings.`**``, ``**`Options`** _(best first)_``).
+  - Bold + backticked keyword markers anchor structural sections (e.g. ``**`Q3 of ~7.`**``, ``**`Options`** _(best first)_``).
+  - Bold prose markers (no backticks) introduce the model's voice (e.g. `**Recommendation:**`, `**Assumption:**`) — matches grill-me's authoring style.
+  - The final action line is italic with a bold `**Next step:**` prefix — only the label is bold; the action phrase that follows is italic only (e.g. ``_**Next step:** Accept `1)`, pick another, or correct the assumption._``). Makes the required action visually unmistakable so the user never has to guess what to do.
+  - Inline references to options or candidates in prose are backticked (e.g. _"start with `1)` and add `2)` later"_) — keeps them visually distinct and prevents accidental list rendering.
   - Blank line between every section.
 - If a question can be answered by exploring the codebase, explore instead of asking.
 
@@ -27,15 +31,13 @@ description: Opinionated version of `grill-me`. Walks the user down every branch
 Use this exact format when asking the user to accept a recommendation.
 
 - Progress marker on line 1: ``**`Q3 of ~7.`**``. Question on line 2 as a blockquote (prefixed with `> `).
-- Lettered options (`` `a)` ``, `` `b)` ``, `` `c)` ``, ...), ordered top preference to lower. Use as many options as the decision warrants — one is fine if there's truly one path. Do not pad. The letter and closing paren are wrapped in backticks so they render as inline code (colored) in the terminal.
-- Option `` `a)` `` is always the recommendation. Options live under an ``**`Options`** _(best first)_`` heading. Options have no leading `-`; separate each option with a blank line.
-- Each option's description is bold. The rationale sits on the immediately following line (no blank line between them), flush left (no indent), in italics. Every option, including `` `a)` ``, gets its own rationale line.
-- The final two lines are always, verbatim:
-  ```
-  **`Pick (a)?`**
-  _You can select another option, or continue the conversation_
-  ```
-- The user may reply with `yes` (accept a), a letter (pick that option), or a free-form custom answer.
+- Numbered options (`` `1)` ``, `` `2)` ``, `` `3)` ``, ...), ordered top preference to lower. Use as many options as the decision warrants — one is fine if there's truly one path. Do not pad. The number and closing paren are wrapped in backticks so they render as inline code (colored) in the terminal.
+- Option `` `1)` `` is always the recommendation. Options live under an ``**`Options`** _(best first)_`` heading. Options have no leading `-`; separate each option with a blank line.
+- Each option's description is bold. The rationale sits on the immediately following line (no blank line between them), flush left (no indent), in italics. Every option, including `` `1)` ``, gets its own rationale line.
+- Optionally, an `**Assumption:**` line (bold prose, no backticks) appears first — names the load-bearing assumption the recommendation rides on plus the model's expected value (e.g. _"`**Assumption:**` Your traffic has legitimate bursts (most APIs do)."_). Include only when the recommendation changes if the assumption is wrong. Skip when the pick is robust to any reasonable user situation.
+- The recommendation line leads with `**Recommendation:**` (bold prose, no backticks — same marker as exploration turns) followed inline by the brief recommendation, referencing the top option `` `1)` `` directly or summarizing in one line. When an `**Assumption:**` is present, the recommendation reads as a consequence of it.
+- The final line is a contextual italic action line with a bold `**Next step:**` prefix; the action phrase after the colon is italic only (e.g. ``_**Next step:** Accept `1)`, pick another, or correct the assumption._``). Makes the required action unmistakable.
+- The user may reply with `yes` (accept the recommendation), a number (pick that option), or a free-form custom answer (e.g. correcting the assumption).
 
 ### Output format
 
@@ -47,41 +49,54 @@ Each recommendation turn must look exactly like this:
 
 **`Options`** _(best first)_
 
-`a)` **<tight description>**
+`1)` **<tight description>**
 _<brief rationale: upsides, downsides, problems>_
 
-`b)` **<tight description>**
+`2)` **<tight description>**
 _<brief rationale: upsides, downsides, problems>_
 
-`c)` **<tight description>**
+`3)` **<tight description>**
 _<brief rationale: upsides, downsides, problems>_
 
-**`Pick (a)?`**
-_You can select another option, or continue the conversation_
+**Assumption:** <optional — load-bearing assumption + model's expected value; omit if recommendation is robust>
+
+**Recommendation:** `1)` <brief restatement or one-line rationale — reads as a consequence of the assumption when one is present>
+
+_**Next step:** <accept, pick another, or correct the assumption — phrase to fit the moment>._
 ```
 
-## Other turn types
+## Exploration turns
 
-Use one of these when there is nothing for the user to accept yet. Apply all shared principles, but the body is free-form within those principles (short paragraphs, lists, or code references are all fine).
+Use this format to surface intent, candidate space, codebase findings, or any question that isn't yet a ranked decision. Exploration turns share recommendation turns' authoring discipline (surface candidates, expose model thinking, state a recommendation) — the difference is the body shape and how the user is invited to respond.
 
-- **Info request** — model needs input the user did not provide. Header: ``**`Info.`**``
-- **Findings** — model investigated the codebase and is surfacing what it learned before proposing options. Header: ``**`Findings.`**``
-- **Open question** — space is too open to pre-rank options. Header: ``**`Question.`**``
-
-Rules specific to these turns:
-
-- No `Qn of ~N.` progress marker. The typed header replaces it. Do not inflate the question count with turns that are not recommendations.
-- No lettered options and no `Pick (a)?` accept line.
-- End every non-recommendation turn with a single short italic line that makes clear what the user can do next. Pick context-appropriate copy (e.g. `_Continue the conversation_`, `_Or steer free-form_`, `_Your call_`).
+- Progress marker on line 1: ``**`Q3 of ~7.`**`` — same counter as recommendation turns. Every question turn contributes to the same `Q of ~N` count.
+- Question on line 2 as a blockquote (prefixed with `> `).
+- Surface the candidate answers / considerations under a short framing line (e.g. _"The candidates and what they imply:"_, _"What I found:"_, _"Possible framings:"_).
+- Candidates use numbered markers `` `1)` ``, `` `2)` ``, `` `3)` ``, ... in backticks. Same marker shape as recommendation turns — but exploration candidates are informational (the model surfacing its thinking), not a ranked accept list. Each candidate's label is bold, joined to a brief content line with an em-dash. The rationale sits on the immediately following line, flush left, in italics. No blank line between label and rationale; blank line between candidates.
+- Penultimate line leads with `**Recommendation:**` (bold prose marker, not backticked — mirrors grill-me's "My recommendation:" authoring style), followed inline by the brief recommendation itself (the analog of recommendation turns' `` `1)` `` pick). One line is fine; longer is fine when the recommendation spans multiple candidates.
+- Final line is a contextual italic action line with a bold `**Next step:**` prefix; the action phrase after the colon is italic only (e.g. ``_**Next step:** Tell me the primary driver, or steer free-form._``). Makes the required action unmistakable. Single line.
+- The user may reply with `yes` (accept the recommendation), a free-form answer, or steer.
 
 ### Output format
 
-Each non-recommendation turn looks like this:
+Each exploration turn must look exactly like this:
 
 ```
-**`<Info|Findings|Question>.`**
+**`Q3 of ~7.`**
+> <question text>
 
-<free-form body within the shared principles>
+<short framing line for the candidates>
 
-_<short italic closer making next steps clear>_
+`1)` **<tight label>** — <brief content>
+_<rationale: implications, tradeoffs>_
+
+`2)` **<tight label>** — <brief content>
+_<rationale: implications, tradeoffs>_
+
+`3)` **<tight label>** — <brief content>
+_<rationale: implications, tradeoffs>_
+
+**Recommendation:** <model's current take, one or two lines>
+
+_**Next step:** <phrase fit to the moment — pick, answer, steer, etc>._
 ```
