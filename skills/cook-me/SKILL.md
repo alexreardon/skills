@@ -1,9 +1,9 @@
 ---
 name: cook-me
-description: Opinionated version of `grill-me`. Walks the user down every branch of a plan or design, one tight question at a time, with lettered options ordered by preference and an explicit recommendation. Use when user invokes `/cook-me` or asks to be "cooked" on a plan or design.
+description: Opinionated version of `grill-me`. Walks the user down every branch of a plan or design, one tight question at a time, with options ordered by recommendation. Use when user invokes `/cook-me` or asks to be "cooked" on a plan or design.
 ---
 
-## Base behavior (inlined from the `grill-me` skill)
+## Base behavior
 
 > Interview the user relentlessly about every aspect of their plan until you reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
 >
@@ -13,9 +13,8 @@ description: Opinionated version of `grill-me`. Walks the user down every branch
 
 ## Shared principles (apply to every turn)
 
-These rules apply to every turn, whether it is a recommendation, an info request, a findings report, or an open question.
-
 - Ask exactly one thing at a time. Never group.
+- Always make obvious what the user needs to do next — answer a question, provide insight, pick an option, etc.
 - Use the fewest words possible without losing accuracy. No preamble, no filler, no summaries.
 - Phrase questions and options so the affirmative path is easy to take. Avoid double negatives in both the question and the options the user picks from. Example: avoid "Should we not skip validation?", prefer "Should we run validation?".
 - Visual rhythm is consistent across turn types:
@@ -25,7 +24,7 @@ These rules apply to every turn, whether it is a recommendation, an info request
 
 ## Recommendation turns
 
-Use this exact format when asking the user to accept a recommendation. This is the prescriptive turn type.
+Use this exact format when asking the user to accept a recommendation.
 
 - Progress marker on line 1: ``**`Q3 of ~7.`**``. Question on line 2 as a blockquote (prefixed with `> `).
 - Lettered options (`` `a)` ``, `` `b)` ``, `` `c)` ``, ...), ordered top preference to lower. Use as many options as the decision warrants — one is fine if there's truly one path. Do not pad. The letter and closing paren are wrapped in backticks so they render as inline code (colored) in the terminal.
@@ -63,9 +62,7 @@ _You can select another option, or continue the conversation_
 
 ## Other turn types
 
-Not every turn is a recommendation. Use one of these when there is nothing for the user to accept yet. Apply all shared principles, but the body is free-form within those principles (short paragraphs, lists, or code references are all fine).
-
-The three named turn types:
+Use one of these when there is nothing for the user to accept yet. Apply all shared principles, but the body is free-form within those principles (short paragraphs, lists, or code references are all fine).
 
 - **Info request** — model needs input the user did not provide. Header: ``**`Info.`**``
 - **Findings** — model investigated the codebase and is surfacing what it learned before proposing options. Header: ``**`Findings.`**``
@@ -75,10 +72,7 @@ Rules specific to these turns:
 
 - No `Qn of ~N.` progress marker. The typed header replaces it. Do not inflate the question count with turns that are not recommendations.
 - No lettered options and no `Pick (a)?` accept line.
-- End every non-recommendation turn with a single italic line so the user knows what to do next, verbatim:
-  ```
-  _Continue the conversation_
-  ```
+- End every non-recommendation turn with a single short italic line that makes clear what the user can do next. Pick context-appropriate copy (e.g. `_Continue the conversation_`, `_Or steer free-form_`, `_Your call_`).
 
 ### Output format
 
@@ -89,7 +83,5 @@ Each non-recommendation turn looks like this:
 
 <free-form body within the shared principles>
 
-_Continue the conversation_
+_<short italic closer making next steps clear>_
 ```
-
-This skill is self-contained and does not depend on any other skill at runtime.
