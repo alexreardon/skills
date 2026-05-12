@@ -35,7 +35,7 @@ _`/cook-me` opinions_
 
 **Prompt:** `"I'm building a React app and trying to choose a state management library. Should I use Redux Toolkit, Zustand, Jotai, or React Context?"`
 
-> 🧘 `/cook-me` has a consistent flow for all turns
+> 🧘 `/cook-me` keeps the same shape every turn, so options are easy to scan and pick
 
 <details>
 <summary>Show output comparison</summary>
