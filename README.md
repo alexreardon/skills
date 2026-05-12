@@ -33,7 +33,7 @@ _`/cook-me` opinions_
 
 #### `/grill-me` vs `/cook-me` output
 
-**Prompt:** `"I want to add rate limiting to my API"`
+**Prompt:** `"I'm building a React app and trying to choose a state management library. Should I use Redux Toolkit, Zustand, Jotai, or React Context?"`
 
 > 🧘 `/cook-me` has a consistent flow for all turns
 
@@ -50,53 +50,50 @@ _`/cook-me` opinions_
 <tr>
 <td valign="top">
 
-Before we dive into the design tree, I need to anchor on the *why* — every downstream decision (algorithm, storage, granularity, failure mode) cascades from this.
+Before picking a library, the most load-bearing question is about the shape of your state itself, because that determines which tool actually fits.
 
-**What's the primary problem you're trying to solve with rate limiting?**
+**What kind of state dominates your app?**
 
-A few common motivations, and they pull the design in very different directions:
+a) Mostly **server state** (data fetched from APIs, cached, refetched) with a small amount of local UI state
+b) Mostly **client state** (complex local logic, derived values, cross-component coordination) — e.g. a builder, editor, or dashboard with rich interactions
+c) Mostly **simple shared UI state** (theme, auth user, modal open/closed, a few global flags)
+d) A genuinely large, deeply nested **normalized domain model** (entities with relationships, lots of updates across many slices)
 
-1. **Protecting infrastructure from overload** — preventing a traffic spike (organic or accidental) from taking down your service. Usually points toward coarse, global limits and aggressive shedding.
-2. **Preventing abuse / DoS** — stopping malicious actors from hammering endpoints. Usually points toward per-IP or per-credential limits with hard blocks and possibly escalating penalties.
-3. **Enforcing fair usage between tenants** — making sure one noisy customer doesn't degrade experience for others. Usually points toward per-account/per-key quotas with isolation guarantees.
-4. **Monetization / plan tiers** — free vs. paid users get different ceilings. Usually points toward per-customer quotas tied to billing, with clear 429 semantics and upgrade paths.
-5. **Protecting a downstream dependency** — e.g., you call a third-party API with its own limits and need to stay under them. Points toward outbound rate limiting, not inbound.
+My recommendation: **(a)** — for the vast majority of React apps today, what people call "state management" is actually server state, and the right answer is to pair a server-state library (React Query / TanStack Query or RTK Query) with a lightweight client store only where needed. Reaching for Redux Toolkit / Zustand / Jotai before answering this question is the most common mistake I see, because each of those libraries shines in a different one of these four scenarios.
 
-**My recommendation:** start by picking the *single* dominant motivation. Most teams try to solve all five with one system and end up with something that does none well. If more than one applies, rank them — we'll design for the top one and check the others as constraints, not co-equal goals.
-
-Which of these is closest to your situation? Or is it something else?
+Which one is yours?
 
 </td>
 <td valign="top">
 
-**`Q1 of ~7.`**
-> What's pushing you toward rate limiting right now?
+**`Q1 of ~6.`**
+> What kind of app are you building, and what's pulling you toward a dedicated library?
 
 **`Candidates`** _(↓ most to least promising)_
 
-`1.` **Abuse / cost control**<br>
-A few clients are hammering endpoints and inflating infra bills or crowding out others.<br>
-_Fairness becomes the real constraint, not throughput; per-identity limits beat global caps._<br>
-`Leads to →` token bucket, leaky bucket (+ more)
+`1.` **Server state dominates**<br>
+Most of your state is API data — lists, details, mutations, caching.<br>
+_The library war is moot here; Redux/Zustand will reinvent caching badly compared to a server-state tool._<br>
+`Leads to →` React Query, SWR, RTK Query
 
-`2.` **Upstream protection**<br>
-A downstream dependency (DB, third-party API, LLM) buckles under bursts you can't absorb.<br>
-_The limit must match the weakest link's ceiling, not your own; misalignment causes cascading failures._<br>
-`Leads to →` concurrency cap, queue, circuit breaker
+`2.` **Cross-cutting client state**<br>
+Auth, theme, modals, wizards — modest shared state across unrelated trees.<br>
+_Context handles this fine until re-renders bite; the bite arrives later than people expect._<br>
+`Leads to →` Context, Zustand
 
-`3.` **Compliance / billing tiers**<br>
-Plans or contracts promise N requests/min and you need to enforce the SLA.<br>
-_Quota accounting now needs to survive restarts and be auditable; in-memory counters won't cut it._<br>
-`Leads to →` Redis counters, sliding window
+`3.` **Complex client-only state**<br>
+Editors, builders, multi-step flows with derived/atomic state and undo.<br>
+_Granular reactivity becomes load-bearing; coarse stores cause cascading re-renders that profile poorly._<br>
+`Leads to →` Jotai, Zustand, Redux Toolkit
 
-`4.` **Defense in depth**<br>
-No specific fire — you want a sane ceiling before something bad happens.<br>
-_Without a real signal, limits get set by vibes and either never trigger or block real users._<br>
-`Leads to →` edge limit (Cloudflare, nginx)
+`4.` **Team/scale-driven**<br>
+Large team, strict conventions, devtools and middleware matter more than ergonomics.<br>
+_Boilerplate stops being the cost; debuggability and predictable patterns dominate the calculus._<br>
+`Leads to →` Redux Toolkit
 
-**Recommendation:** `1.` is the most common driver and the answer reshapes everything downstream — algorithm, storage, key (IP vs user vs API key), and where the limit lives.
+**Recommendation:** Most React apps land in `1.` — the four libraries you listed solve a different problem than the one you probably have. Confirm the shape before we rank.
 
-_**Next step:** Pick the closest match or describe the actual trigger in your own words._
+_**Next step:** Pick a candidate, or describe the state that's actually painful._
 
 </td>
 </tr>
